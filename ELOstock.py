@@ -3,6 +3,7 @@ import numpy as np
 import yfinance as yf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
 
 # Elo functions
 def calculate_expected_score(rating_a, rating_b):
@@ -69,12 +70,12 @@ def prepare_dataset(tickers, start_date, end_date):
     
     features = returns.values[1:]  # Daily returns as features
     target = np.array(elo_ratings[1:])  # Elo ratings as the target variable
-    return features, target, dates
+    return features, target, dates, data
 
 # TensorFlow model
 def build_model(input_shape):
     """Build and compile a TensorFlow model."""
-    model = tf.keras.Sequential([
+    model = tf.keras.Sequential([ 
         tf.keras.layers.Dense(128, activation='relu', input_shape=(input_shape,)),
         tf.keras.layers.Dropout(0.3),  # Dropout layer to prevent overfitting
         tf.keras.layers.Dense(64, activation='relu'),
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     end_date = "2024-12-27"
     
     # Prepare dataset
-    features, target, dates = prepare_dataset(tickers, start_date, end_date)
+    features, target, dates, data = prepare_dataset(tickers, start_date, end_date)
     scaler = MinMaxScaler()
     features = scaler.fit_transform(features)  # Scale features
     target = scaler.fit_transform(target)  # Scale targets
@@ -111,16 +112,71 @@ if __name__ == "__main__":
     
     # Predict Elo ratings for test data
     predictions = model.predict(X_test)
-    print("\nPredicted vs. Actual Elo Ratings (Top 2 Tickers):")
+    
+    # Simulate trading with $10,000 for top 2 stocks and equal split across all stocks
+    initial_investment = 10000
+    portfolio_value_top_2 = initial_investment
+    portfolio_value_equal = initial_investment
+    last_top_2 = None
+    top_2_tickers = []
 
-    # Select the top 2 tickers based on predicted Elo ratings for each day
-    for j in range(-5, 0):  # For each of the last 5 days in the test set
+    portfolio_values_top_2 = [portfolio_value_top_2]  # Store portfolio value for top 2 stocks
+    portfolio_values_equal = [portfolio_value_equal]  # Store portfolio value for equal split
+
+    # Fetch daily returns for simulation from original data (not predictions)
+    daily_returns_data = data.pct_change().iloc[1:]  # Get daily returns for simulation
+
+    for j in range(len(dates_test)):  # For each day in the test set
         predicted_elo = predictions[j]
         tickers_elo = list(zip(tickers, predicted_elo))  # Combine tickers with predicted Elo
         tickers_elo.sort(key=lambda x: x[1], reverse=True)  # Sort by Elo rating in descending order
         
-        top_2_tickers = tickers_elo[:2]  # Get the top 2 tickers
+        top_2_today = tickers_elo[:2]  # Get the top 2 tickers
+        
+        # If the top 2 stocks change, we update the portfolio values
+        if top_2_today != last_top_2:
+            last_top_2 = top_2_today
+        
+        stock_1 = top_2_today[0][0]
+        stock_2 = top_2_today[1][0]
+        
+        # Get the daily returns for top 2 stocks from the original data
+        daily_returns_1 = daily_returns_data.loc[dates_test[j], stock_1]  # Stock 1 daily return
+        daily_returns_2 = daily_returns_data.loc[dates_test[j], stock_2]  # Stock 2 daily return
+        
+        # Update portfolio based on daily returns for top 2 stocks
+        allocation_per_stock = portfolio_value_top_2 / 2  # Equal split between top 2 stocks
+        portfolio_value_top_2 *= (1 + daily_returns_1 / 2)  # Apply daily returns for top 2 stocks
+        portfolio_value_top_2 *= (1 + daily_returns_2 / 2)  # Apply daily returns for top 2 stocks
+        
+        # Simulate the portfolio with equal split across all stocks
+        allocation_per_stock_equal = portfolio_value_equal / len(tickers)  # Equal split across all stocks
+        for stock in tickers:
+            daily_return = daily_returns_data.loc[dates_test[j], stock]  # Stock daily return
+            portfolio_value_equal *= (1 + daily_return / len(tickers))  # Apply daily return for each stock
+        
+        # Store the portfolio values for plotting
+        portfolio_values_top_2.append(portfolio_value_top_2)
+        portfolio_values_equal.append(portfolio_value_equal)
+        
+        # Print results for the day
         print(f"\nDate: {dates_test[j]}")
-        print(f"Top 2 stocks to trade on {dates_test[j]}:")
-        for ticker, elo in top_2_tickers:
-            print(f"Ticker: {ticker}, Predicted Elo: {elo:.2f}")
+        print(f"Top 2 Stocks: {stock_1}, {stock_2}")
+        print(f"Portfolio Value (Top 2 Stocks): ${portfolio_value_top_2:.2f}")
+        print(f"Portfolio Value (Equal Split): ${portfolio_value_equal:.2f}")
+    
+    print(f"\nFinal Portfolio Value (Top 2 Stocks): ${portfolio_value_top_2:.2f}")
+    print(f"Final Portfolio Value (Equal Split): ${portfolio_value_equal:.2f}")
+
+    
+    # Saving the plot
+    plt.figure(figsize=(12, 6))
+    plt.plot(dates_test, portfolio_values_top_2[1:], label="Top 2 Stocks Portfolio", color='b', linewidth=2)
+    plt.plot(dates_test, portfolio_values_equal[1:], label="Equal Split Portfolio", color='g', linewidth=2)
+    plt.title('Portfolio Value Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Portfolio Value (RMB)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('/mnt/d/PriProjects/EloStock/portfolio_simulation.png')  # Save plot as a PNG file
+    print("Plot saved as 'portfolio_simulation.png'.")
