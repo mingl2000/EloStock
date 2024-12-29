@@ -75,11 +75,15 @@ def prepare_dataset(tickers, start_date, end_date):
 def build_model(input_shape):
     """Build and compile a TensorFlow model."""
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(64, activation='relu', input_shape=(input_shape,)),
+        tf.keras.layers.Dense(128, activation='relu', input_shape=(input_shape,)),
+        tf.keras.layers.Dropout(0.3),  # Dropout layer to prevent overfitting
+        tf.keras.layers.Dense(64, activation='relu'),
         tf.keras.layers.Dense(32, activation='relu'),
         tf.keras.layers.Dense(len(tickers))  # Output one value per stock
     ])
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    
+    # Experiment with a lower learning rate and a different optimizer (RMSprop)
+    model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0005), loss='mse', metrics=['mae'])
     return model
 
 # Main script
@@ -99,7 +103,7 @@ if __name__ == "__main__":
     
     # Build and train the model
     model = build_model(X_train.shape[1])
-    model.fit(X_train, y_train, epochs=200, batch_size=16, validation_split=0.1)
+    model.fit(X_train, y_train, epochs=200, batch_size=16, validation_split=0.1, verbose=1)
 
     # Test the model
     test_loss, test_mae = model.evaluate(X_test, y_test)
@@ -107,11 +111,16 @@ if __name__ == "__main__":
     
     # Predict Elo ratings for test data
     predictions = model.predict(X_test)
-    print("\nPredicted vs. Actual Elo Ratings (Last 5 Days):")
+    print("\nPredicted vs. Actual Elo Ratings (Top 2 Tickers):")
 
-    # Show the results for each stock with corresponding date (last 5 days)
-    for i in range(len(tickers)):  # Loop through each stock ticker
-        print(f"\nStock: {tickers[i]}")
-        for j in range(-5, 0):  # Show last 5 predictions for each stock
-            print(f"Date: {dates_test[j]}")
-            print(f"Predicted Elo: {predictions[j][i]:.2f}, Actual Elo: {y_test[j][i]:.2f}")
+    # Select the top 2 tickers based on predicted Elo ratings for each day
+    for j in range(-5, 0):  # For each of the last 5 days in the test set
+        predicted_elo = predictions[j]
+        tickers_elo = list(zip(tickers, predicted_elo))  # Combine tickers with predicted Elo
+        tickers_elo.sort(key=lambda x: x[1], reverse=True)  # Sort by Elo rating in descending order
+        
+        top_2_tickers = tickers_elo[:2]  # Get the top 2 tickers
+        print(f"\nDate: {dates_test[j]}")
+        print(f"Top 2 stocks to trade on {dates_test[j]}:")
+        for ticker, elo in top_2_tickers:
+            print(f"Ticker: {ticker}, Predicted Elo: {elo:.2f}")
