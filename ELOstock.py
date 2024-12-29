@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 import yfinance as yf
-import math
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
@@ -51,24 +50,26 @@ def fetch_stock_data(tickers, start_date, end_date):
     """Fetch historical stock data from Yahoo Finance."""
     data = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
     daily_returns = data.pct_change().iloc[1:]  # Calculate daily returns
-    return daily_returns
+    return data, daily_returns
 
 # Prepare dataset
 def prepare_dataset(tickers, start_date, end_date):
     """Prepare features and target (Elo ratings) for machine learning."""
-    returns = fetch_stock_data(tickers, start_date, end_date)
+    data, returns = fetch_stock_data(tickers, start_date, end_date)
     stock_ratings = {ticker: 1500 for ticker in tickers}  # Initial Elo ratings
     
     # Calculate Elo ratings for each day
     elo_ratings = []
+    dates = []
     for date, row in returns.iterrows():
         daily_returns = row.to_dict()
         stock_ratings = update_elo_ratings(stock_ratings, daily_returns)
         elo_ratings.append(list(stock_ratings.values()))
+        dates.append(date)
     
     features = returns.values[1:]  # Daily returns as features
     target = np.array(elo_ratings[1:])  # Elo ratings as the target variable
-    return features, target
+    return features, target, dates
 
 # TensorFlow model
 def build_model(input_shape):
@@ -88,16 +89,17 @@ if __name__ == "__main__":
     end_date = "2024-12-27"
     
     # Prepare dataset
-    features, target = prepare_dataset(tickers, start_date, end_date)
+    features, target, dates = prepare_dataset(tickers, start_date, end_date)
     scaler = MinMaxScaler()
     features = scaler.fit_transform(features)  # Scale features
     target = scaler.fit_transform(target)  # Scale targets
 
-    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
+    # Split data without shuffling (so that the order is preserved)
+    X_train, X_test, y_train, y_test, dates_train, dates_test = train_test_split(features, target, dates[1:], test_size=0.2, shuffle=False)
     
     # Build and train the model
     model = build_model(X_train.shape[1])
-    model.fit(X_train, y_train, epochs=100, batch_size=16, validation_split=0.1)
+    model.fit(X_train, y_train, epochs=200, batch_size=16, validation_split=0.1)
 
     # Test the model
     test_loss, test_mae = model.evaluate(X_test, y_test)
@@ -105,6 +107,11 @@ if __name__ == "__main__":
     
     # Predict Elo ratings for test data
     predictions = model.predict(X_test)
-    print("\nPredicted vs. Actual Elo Ratings:")
-    for i in range(5):  # Show first 5 predictions
-        print(f"Predicted: {predictions[i]}, Actual: {y_test[i]}")
+    print("\nPredicted vs. Actual Elo Ratings (Last 5 Days):")
+
+    # Show the results for each stock with corresponding date (last 5 days)
+    for i in range(len(tickers)):  # Loop through each stock ticker
+        print(f"\nStock: {tickers[i]}")
+        for j in range(-5, 0):  # Show last 5 predictions for each stock
+            print(f"Date: {dates_test[j]}")
+            print(f"Predicted Elo: {predictions[j][i]:.2f}, Actual Elo: {y_test[j][i]:.2f}")
