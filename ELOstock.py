@@ -90,29 +90,6 @@ def build_model(input_shape):
 # Main script
 if __name__ == "__main__":
     tickers = ["AAPL", "MSFT", "GOOG", "AMZN", "TSLA"]
-    '''
-    tickers = ["300750.SZ", "688047.SS", "600745.SS", "300576.SZ", "002049.SZ","002230.SZ"] #good
-
-    #tickers = ["689009.SS","688981.SS","688819.SS","688777.SS","688728.SS",
-    #tickers = [           "688617.SS","688599.SS","688563.SS","688561.SS","688538.SS"]
-    #"688563.SS"  "688249.SS", "688363.SS" "688375.SS" "688469.SS", "688472.SS" "688506.SS", bad
-    tickers = [           "688617.SS","688599.SS","688561.SS","688538.SS"] #good
-    
-    tickers = [    "688349.SS","688303.SS","688301.SS","688297.SS","688295.SS"] #good
-    
-    tickers = [    "688271.SS","688256.SS","688249.SS","688234.SS","688223.SS"] #bad
-    
-    tickers = [    "688220.SS","688188.SS","688187.SS","688180.SS","688169.SS"]#good
-    
-    tickers = [    "688126.SS","688122.SS","688120.SS","688114.SS","688111.SS"]#good
-    
-    tickers = [    "688099.SS","688082.SS","688072.SS","688065.SS","688047.SS"]#good
-    
-    tickers = [    "688041.SS","688036.SS","688012.SS","688009.SS","688008.SS"]#good
-    tickers = [    "688271.SS","688256.SS","688234.SS","688223.SS"] #good
-    tickers = [    "688396.SS","688385.SS","688375.SS"] #good
-    tickers = [    "688525.SS","688521.SS","688475.SS"]  # good
-    '''
     tickers = ["689009.SS","688981.SS","688819.SS","688777.SS","688728.SS",
                
                "688617.SS","688599.SS","688561.SS","688538.SS",
@@ -124,9 +101,7 @@ if __name__ == "__main__":
                "688271.SS","688256.SS","688234.SS","688223.SS",
                "688396.SS","688385.SS","688375.SS",
                "688525.SS","688521.SS","688475.SS"]
-
-
-    start_date = "2023-01-01"
+    start_date = "2024-01-01"
     end_date = "2024-12-27"
     
     # Prepare dataset
@@ -160,36 +135,39 @@ if __name__ == "__main__":
     portfolio_values_equal = [portfolio_value_equal]  # Store portfolio value for equal split
 
     # Fetch daily returns for simulation from original data (not predictions)
-    daily_returns_data = data.pct_change().iloc[1:]  # Get daily returns for simulation
-
-    for j in range(len(dates_test)):  # For each day in the test set
+    for j in range(len(dates_test) - 1):  # Loop until the second last date
         predicted_elo = predictions[j]
         tickers_elo = list(zip(tickers, predicted_elo))  # Combine tickers with predicted Elo
         tickers_elo.sort(key=lambda x: x[1], reverse=True)  # Sort by Elo rating in descending order
         
         top_2_today = tickers_elo[:2]  # Get the top 2 tickers
         
-        # If the top 2 stocks change, we update the portfolio values
+        # Update only if top 2 tickers change
         if top_2_today != last_top_2:
             last_top_2 = top_2_today
         
         stock_1 = top_2_today[0][0]
         stock_2 = top_2_today[1][0]
         
-        # Get the daily returns for top 2 stocks from the original data
-        daily_returns_1 = daily_returns_data.loc[dates_test[j], stock_1]  # Stock 1 daily return
-        daily_returns_2 = daily_returns_data.loc[dates_test[j], stock_2]  # Stock 2 daily return
+        # Get next day's returns for top 2 stocks
+        try:
+            next_day_return_1 = (data[stock_1].iloc[j + 1] / data[stock_1].iloc[j]) - 1
+            next_day_return_2 = (data[stock_2].iloc[j + 1] / data[stock_2].iloc[j]) - 1
+        except IndexError:
+            continue  # Skip if next day's data is not available
         
-        # Update portfolio based on daily returns for top 2 stocks
+        # Update portfolio based on next day's returns for top 2 stocks
         allocation_per_stock = portfolio_value_top_2 / 2  # Equal split between top 2 stocks
-        portfolio_value_top_2 *= (1 + daily_returns_1 / 2)  # Apply daily returns for top 2 stocks
-        portfolio_value_top_2 *= (1 + daily_returns_2 / 2)  # Apply daily returns for top 2 stocks
+        portfolio_value_top_2 += allocation_per_stock * next_day_return_1 + allocation_per_stock * next_day_return_2
         
         # Simulate the portfolio with equal split across all stocks
         allocation_per_stock_equal = portfolio_value_equal / len(tickers)  # Equal split across all stocks
         for stock in tickers:
-            daily_return = daily_returns_data.loc[dates_test[j], stock]  # Stock daily return
-            portfolio_value_equal *= (1 + daily_return / len(tickers))  # Apply daily return for each stock
+            try:
+                next_day_return = (data[stock].iloc[j + 1] / data[stock].iloc[j]) - 1
+                portfolio_value_equal += allocation_per_stock_equal * next_day_return
+            except IndexError:
+                continue  # Skip if next day's data is not available
         
         # Store the portfolio values for plotting
         portfolio_values_top_2.append(portfolio_value_top_2)
@@ -204,15 +182,14 @@ if __name__ == "__main__":
     print(f"\nFinal Portfolio Value (Top 2 Stocks): ${portfolio_value_top_2:.2f}")
     print(f"Final Portfolio Value (Equal Split): ${portfolio_value_equal:.2f}")
 
-    
     # Saving the plot
     plt.figure(figsize=(12, 6))
-    plt.plot(dates_test, portfolio_values_top_2[1:], label="Top 2 Stocks Portfolio", color='b', linewidth=2)
-    plt.plot(dates_test, portfolio_values_equal[1:], label="Equal Split Portfolio", color='g', linewidth=2)
+    plt.plot(dates_test[:-1], portfolio_values_top_2[1:], label="Top 2 Stocks Portfolio", color='b', linewidth=2)
+    plt.plot(dates_test[:-1], portfolio_values_equal[1:], label="Equal Split Portfolio", color='g', linewidth=2)
     plt.title('Portfolio Value Over Time')
     plt.xlabel('Date')
-    plt.ylabel('Portfolio Value (RMB)')
+    plt.ylabel('Portfolio Value (USD)')
     plt.legend()
     plt.grid(True)
-    plt.savefig('/mnt/d/PriProjects/EloStock/portfolio_simulation.png')  # Save plot as a PNG file
-    print("Plot saved as 'portfolio_simulation.png'.")
+    plt.savefig('/mnt/d/PriProjects/EloStock/portfolio_simulation_updated.png')  # Save plot as a PNG file
+    print("Plot saved as 'portfolio_simulation_updated.png'.")
