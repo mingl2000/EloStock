@@ -4,6 +4,16 @@ import yfinance as yf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+import random
+import os
+
+
+def set_random_seed():
+    seed = 42
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 # Elo functions
 def calculate_expected_score(rating_a, rating_b):
@@ -89,18 +99,8 @@ def build_model(input_shape):
 
 # Main script
 if __name__ == "__main__":
+    set_random_seed()
     tickers = ["AAPL", "MSFT", "GOOG", "AMZN", "TSLA"]
-    tickers = ["689009.SS","688981.SS","688819.SS","688777.SS","688728.SS",
-               
-               "688617.SS","688599.SS","688561.SS","688538.SS",
-               "688349.SS","688303.SS","688301.SS","688297.SS","688295.SS",
-               "688220.SS","688188.SS","688187.SS","688180.SS","688169.SS",
-               "688126.SS","688122.SS","688120.SS","688114.SS","688111.SS",
-               "688099.SS","688082.SS","688072.SS","688065.SS","688047.SS",
-               "688041.SS","688036.SS","688012.SS","688009.SS","688008.SS",
-               "688271.SS","688256.SS","688234.SS","688223.SS",
-               "688396.SS","688385.SS","688375.SS",
-               "688525.SS","688521.SS","688475.SS"]
     start_date = "2024-01-01"
     end_date = "2024-12-27"
     
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     
     # Build and train the model
     model = build_model(X_train.shape[1])
-    model.fit(X_train, y_train, epochs=200, batch_size=16, validation_split=0.1, verbose=1)
+    model.fit(X_train, y_train, epochs=20, batch_size=16, validation_split=0.1, verbose=1)
 
     # Test the model
     test_loss, test_mae = model.evaluate(X_test, y_test)
