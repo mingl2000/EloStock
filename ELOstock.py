@@ -7,6 +7,20 @@ import matplotlib.pyplot as plt
 import random
 import os
 
+def plot_train_history(history, title):
+  loss = history.history['loss']
+  val_loss = history.history['val_loss']
+
+  epochs = range(len(loss))
+
+  plt.figure()
+  plt.xscale('log')
+  plt.plot(epochs, loss, 'b', label='Training loss')
+  plt.plot(epochs, val_loss, 'r', label='Validation loss')
+  plt.title(title)
+  plt.legend()
+  plt.savefig('/mnt/d/PriProjects/EloStock/tensorflow_history.png')
+  #plt.show()
 
 def set_random_seed():
     seed = 42
@@ -93,6 +107,7 @@ def build_model(input_shape):
     model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0005), loss='mse', metrics=['mae'])
     return model
 
+
 # Main script
 if __name__ == "__main__":
     set_random_seed()
@@ -121,18 +136,29 @@ if __name__ == "__main__":
     target = scaler.fit_transform(target)  # Scale targets
 
     # Split data without shuffling (so that the order is preserved)
-    X_train, X_test, y_train, y_test, dates_train, dates_test = train_test_split(features, target, dates[1:], test_size=0.2, shuffle=False)
-    
+    X_train, X_test, y_train, y_test, dates_train, dates_test = train_test_split(features, target, dates[1:], test_size=0.4, shuffle=False)
+
+    #checkpoint_path = "training/best.keras"
+    checkpoint_path = "/mnt/d/PriProjects/EloStock/best_model.keras"
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path,
+        monitor="val_loss",
+        save_best_only=True,
+        mode="max"  # 'max' for maximizing the monitored metric
+    )
     # Build and train the model
     model = build_model(X_train.shape[1])
-    model.fit(X_train, y_train, epochs=200, batch_size=16, validation_split=0.1, verbose=1)
+    history =model.fit(X_train, y_train, epochs=300, batch_size=16, validation_split=0.1, verbose=1, callbacks=[checkpoint_callback])
+    
+    plot_train_history(history,'multi Step Training and validation loss')
+    best_model = tf.keras.models.load_model(checkpoint_path)
 
     # Test the model
-    test_loss, test_mae = model.evaluate(X_test, y_test)
+    test_loss, test_mae = best_model.evaluate(X_test, y_test)
     print(f"\nTest Loss: {test_loss:.4f}, Test MAE: {test_mae:.4f}")
     
     # Predict Elo ratings for test data
-    predictions = model.predict(X_test)
+    predictions = best_model.predict(X_test)
     
     # Simulate trading with $10,000 for top 2 stocks and equal split across all stocks
     initial_investment = 10000
