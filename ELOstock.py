@@ -107,7 +107,17 @@ def build_model(input_shape):
     model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0005), loss='mse', metrics=['mae'])
     return model
 
-
+def training(checkpoint_path):
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path,
+        monitor="val_loss",
+        save_best_only=True,
+        mode="max"  # 'max' for maximizing the monitored metric
+    )
+    # Build and train the model
+    model = build_model(X_train.shape[1])
+    history =model.fit(X_train, y_train, epochs=300, batch_size=16, validation_split=0.1, verbose=1, callbacks=[checkpoint_callback])
+    plot_train_history(history,'multi Step Training and validation loss')
 # Main script
 if __name__ == "__main__":
     set_random_seed()
@@ -140,17 +150,7 @@ if __name__ == "__main__":
 
     #checkpoint_path = "training/best.keras"
     checkpoint_path = "/mnt/d/PriProjects/EloStock/best_model.keras"
-    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path,
-        monitor="val_loss",
-        save_best_only=True,
-        mode="max"  # 'max' for maximizing the monitored metric
-    )
-    # Build and train the model
-    model = build_model(X_train.shape[1])
-    history =model.fit(X_train, y_train, epochs=300, batch_size=16, validation_split=0.1, verbose=1, callbacks=[checkpoint_callback])
-    
-    plot_train_history(history,'multi Step Training and validation loss')
+    training(checkpoint_path)
     best_model = tf.keras.models.load_model(checkpoint_path)
 
     # Test the model
